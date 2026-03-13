@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Skill(claude-dashboard:check-usage)"
+      "Skill(claude-dashboard:check-usage)",
+      "Bash(git -C \"D:/github/web-game-v1\" remote get-url origin)"
     ]
   }
 }

@@ -1,5 +1,10 @@
 # SNAP RUSH
 
+[![GitHub last commit](https://img.shields.io/github/last-commit/hellomrma/web-game-v1)](https://github.com/hellomrma/web-game-v1/commits/main)
+[![GitHub stars](https://img.shields.io/github/stars/hellomrma/web-game-v1?style=social)](https://github.com/hellomrma/web-game-v1/stargazers)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://vercel.com)
+[![License](https://img.shields.io/github/license/hellomrma/web-game-v1)](https://github.com/hellomrma/web-game-v1/blob/main/LICENSE)
+
 > 40초 안에 최대한 많은 타깃을 잡아라! 레트로 아케이드 스타일 순발력 게임
 
 ## 게임 방법
