@@ -10,9 +10,10 @@
  *  Phase 2 13~26s : 최대 5개,  0.6s 간격, 버스트 스폰 15%
  *  Phase 3 26~40s : 최대 7개, 0.38s 간격, 버스트 스폰 30%, 수명 短
  *
- * ── 마박사 Attack! ──────────────────────────────────────────
- *  게임 중 딱 1번, 랜덤 타이밍에 발동
- *  먹물이 화면을 뒤덮는 동안 타깃이 보이지 않음
+ * ── 특수 공격 이벤트 (게임 중 각 1번, 랜덤 타이밍) ──────────
+ *  마박사 Attack! — 먹물이 화면을 뒤덮어 타깃이 보이지 않음
+ *  홍수조 Attack! — 타깃이 빠르게 좌우로 진동
+ *  신비   Attack! — 타이머가 2배속으로 빨라짐
  */
 
 // ── URL 파라미터 ─────────────────────────────────────────────
@@ -79,29 +80,45 @@ function getPhase(elapsed) {
 }
 
 // ════════════════════════════════════════════════════════════
-// 마박사 Attack! 이벤트
+// 공격 이벤트 공통 헬퍼
+// ════════════════════════════════════════════════════════════
+
+// 세 공격의 트리거 타이밍을 각 구간에서 랜덤 선택 후 무작위 배정
+function initAttacks() {
+  // 5~13s / 14~24s / 25~35s 구간에서 각 1회 — 겹침 방지 (40초 게임 전체 커버)
+  const zones = [[5000, 13000], [14000, 24000], [25000, 35000]];
+  const times = zones.map(([lo, hi]) => lo + Math.random() * (hi - lo));
+
+  // 어떤 공격이 어느 타이밍에 발동할지 랜덤 셔플
+  const attacks = [MABAKSA, HONGSOO, SHINBI];
+  for (let i = attacks.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [attacks[i], attacks[j]] = [attacks[j], attacks[i]];
+  }
+  attacks.forEach((atk, i) => atk.init(times[i]));
+}
+
+// ════════════════════════════════════════════════════════════
+// 마박사 Attack! — 먹물이 화면을 뒤덮음
 // ════════════════════════════════════════════════════════════
 const MABAKSA = {
   phase:      'idle',  // 'idle' | 'announce' | 'spread' | 'hold' | 'clear'
   triggered:  false,
   phaseStart: 0,
-  triggerAt:  0,       // ms (게임 경과 기준)
-  drops:      [],      // 먹물 방울 목록
+  triggerAt:  0,
+  drops:      [],
 
-  // 각 페이즈 지속 시간 (ms)
   D: { announce: 1000, spread: 1600, hold: 2400, clear: 900 },
-
-  init() {
-    this.phase     = 'idle';
-    this.triggered = false;
-    this.drops     = [];
-    // 8초 ~ 30초 사이 랜덤 발동 (40초 게임에서 마지막 10초는 제외)
-    this.triggerAt = 8000 + Math.random() * 22000;
-  },
 
   get isActive() { return this.phase !== 'idle'; },
 
-  // gameLoop 에서 매 프레임 호출 — 발동 여부 체크
+  init(triggerAt) {
+    this.phase     = 'idle';
+    this.triggered = false;
+    this.drops     = [];
+    this.triggerAt = triggerAt;
+  },
+
   tick(elapsedMs, now) {
     if (this.triggered) return;
     if (elapsedMs >= this.triggerAt) {
@@ -113,22 +130,21 @@ const MABAKSA = {
   },
 
   _spawnDrops() {
-    const count = 5 + Math.floor(Math.random() * 3); // 5~7 방울
+    const count = 5 + Math.floor(Math.random() * 3);
     const diag  = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
     for (let i = 0; i < count; i++) {
       this.drops.push({
-        x:     Math.random() * canvas.width,
-        y:     Math.random() * canvas.height,
-        maxR:  diag * (0.5 + Math.random() * 0.35),
-        scaleX: 0.85 + Math.random() * 0.3, // 타원형 비율 (먹물 번짐 느낌)
+        x:      Math.random() * canvas.width,
+        y:      Math.random() * canvas.height,
+        maxR:   diag * (0.5 + Math.random() * 0.35),
+        scaleX: 0.85 + Math.random() * 0.3,
         scaleY: 0.85 + Math.random() * 0.3,
         angle:  Math.random() * Math.PI,
-        delay:  Math.random() * 0.35,        // 방울마다 시작 딜레이
+        delay:  Math.random() * 0.35,
       });
     }
   },
 
-  // draw 에서 매 프레임 호출
   draw(now) {
     if (!this.isActive) return;
     const elapsed = now - this.phaseStart;
@@ -137,115 +153,85 @@ const MABAKSA = {
       case 'announce': {
         const t = elapsed / this.D.announce;
         this._drawAnnounce(Math.min(t, 1));
-        if (elapsed >= this.D.announce) {
-          this.phase = 'spread'; this.phaseStart = now;
-        }
+        if (elapsed >= this.D.announce) { this.phase = 'spread'; this.phaseStart = now; }
         break;
       }
       case 'spread': {
         const t = elapsed / this.D.spread;
         this._drawInk(Math.min(t, 1));
         this._drawAttackText(1, false);
-        if (elapsed >= this.D.spread) {
-          this.phase = 'hold'; this.phaseStart = now;
-        }
+        if (elapsed >= this.D.spread) { this.phase = 'hold'; this.phaseStart = now; }
         break;
       }
       case 'hold': {
         this._drawInk(1);
         this._drawAttackText(1, true, elapsed / this.D.hold);
-        if (elapsed >= this.D.hold) {
-          this.phase = 'clear'; this.phaseStart = now;
-        }
+        if (elapsed >= this.D.hold) { this.phase = 'clear'; this.phaseStart = now; }
         break;
       }
       case 'clear': {
         const t = 1 - elapsed / this.D.clear;
         this._drawInk(Math.max(t, 0));
-        if (elapsed >= this.D.clear) {
-          this.phase = 'idle';
-        }
+        if (elapsed >= this.D.clear) { this.phase = 'idle'; }
         break;
       }
     }
   },
 
-  // ── Announce: 화면 디밍 + 경고 텍스트 등장 ─────────────────
   _drawAnnounce(t) {
     ctx.save();
-
-    // 검은 디밍
     ctx.fillStyle = `rgba(0,0,0,${t * 0.55})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 텍스트 등장 (t > 0.25 부터)
     if (t > 0.25) {
       const textT = (t - 0.25) / 0.75;
-      // 확대하며 등장
       const scale = 0.4 + textT * 0.6;
       ctx.globalAlpha = textT;
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.scale(scale, scale);
-      this._renderAttackString();
+      this._renderText();
     }
-
     ctx.restore();
   },
 
-  // ── Spread / Hold: 텍스트 (상단에 그림) ────────────────────
   _drawAttackText(alpha, pulse, holdT = 0) {
     ctx.save();
     const p = pulse ? 0.5 + 0.5 * Math.sin(holdT * Math.PI * 5) : 1;
     ctx.globalAlpha = alpha * p * 0.55;
     ctx.translate(canvas.width / 2, canvas.height / 2);
-    this._renderAttackString();
+    this._renderText();
     ctx.restore();
   },
 
-  _renderAttackString() {
+  _renderText() {
     const size = Math.max(14, Math.min(canvas.width * 0.045, 32));
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
     ctx.font         = `bold ${size}px 'Press Start 2P'`;
-
-    // 빨간 외곽 그림자
-    ctx.shadowColor = 'rgba(255,0,0,0.9)';
-    ctx.shadowBlur  = 24;
-    ctx.fillStyle   = '#ff2020';
+    ctx.shadowColor  = 'rgba(255,0,0,0.9)';
+    ctx.shadowBlur   = 24;
+    ctx.fillStyle    = '#ff2020';
     ctx.fillText('마박사 Attack!', 0, 0);
-
-    // 흰색 하이라이트 (텍스트 위에 얇게)
-    ctx.shadowBlur  = 0;
-    ctx.fillStyle   = 'rgba(255,160,160,0.4)';
+    ctx.shadowBlur   = 0;
+    ctx.fillStyle    = 'rgba(255,160,160,0.4)';
     ctx.fillText('마박사 Attack!', 0, 0);
   },
 
-  // ── Ink: 먹물 번짐 ─────────────────────────────────────────
   _drawInk(progress) {
     if (progress <= 0) return;
-
     ctx.save();
-
     this.drops.forEach(drop => {
-      // delay 반영한 개별 진행도
       const localT = Math.min(Math.max((progress - drop.delay) / (1 - drop.delay), 0), 1);
       if (localT <= 0) return;
-
       const baseR = drop.maxR * localT;
-
       ctx.save();
       ctx.translate(drop.x, drop.y);
       ctx.rotate(drop.angle);
       ctx.scale(drop.scaleX, drop.scaleY);
-
-      // 방울 중심부 — 불투명
       const innerR = baseR * 0.6;
       ctx.beginPath();
       ctx.arc(0, 0, innerR, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(2, 2, 10, ${Math.min(progress * 1.4, 1)})`;
       ctx.fill();
-
-      // 방울 외곽 — 흐림 (먹물 번짐 느낌)
       const grad = ctx.createRadialGradient(0, 0, innerR * 0.8, 0, 0, baseR);
       grad.addColorStop(0,   `rgba(2, 2, 10, ${Math.min(progress * 1.2, 0.98)})`);
       grad.addColorStop(0.6, `rgba(2, 2, 10, ${Math.min(progress * 0.9, 0.85)})`);
@@ -254,11 +240,227 @@ const MABAKSA = {
       ctx.arc(0, 0, baseR, 0, Math.PI * 2);
       ctx.fillStyle = grad;
       ctx.fill();
-
       ctx.restore();
     });
-
     ctx.restore();
+  },
+};
+
+// ════════════════════════════════════════════════════════════
+// 홍수조 Attack! — 타깃이 빠르게 좌우로 진동
+// ════════════════════════════════════════════════════════════
+const HONGSOO = {
+  phase:      'idle',  // 'idle' | 'announce' | 'active' | 'clear'
+  triggered:  false,
+  phaseStart: 0,
+  triggerAt:  0,
+
+  D: { announce: 800, active: 5500, clear: 600 },
+
+  get isActive()   { return this.phase !== 'idle'; },
+  get isWiggling() { return this.phase === 'active'; },
+
+  init(triggerAt) {
+    this.phase     = 'idle';
+    this.triggered = false;
+    this.triggerAt = triggerAt;
+  },
+
+  _assignWiggle(t) {
+    const spd = 4 + Math.random() * 5; // px per 60fps frame
+    t.wiggleVx = (Math.random() < 0.5 ? 1 : -1) * spd;
+  },
+
+  // gameLoop 에서 매 프레임 호출 — 타깃 위치 갱신
+  updateTargets(dt) {
+    if (this.phase !== 'active') return;
+    const fac = dt / 16.667; // 60fps 정규화
+    state.targets.forEach(t => {
+      if (!t.wiggleVx) this._assignWiggle(t);
+      t.x += t.wiggleVx * fac;
+      const m = t.r + 10;
+      if (t.x < m)                { t.x = m;                t.wiggleVx =  Math.abs(t.wiggleVx); }
+      if (t.x > canvas.width - m) { t.x = canvas.width - m; t.wiggleVx = -Math.abs(t.wiggleVx); }
+    });
+  },
+
+  tick(elapsedMs, now) {
+    if (this.triggered) return;
+    if (elapsedMs >= this.triggerAt) {
+      this.triggered  = true;
+      this.phase      = 'announce';
+      this.phaseStart = now;
+    }
+  },
+
+  draw(now) {
+    if (!this.isActive) return;
+    const elapsed = now - this.phaseStart;
+
+    switch (this.phase) {
+      case 'announce': {
+        const t = Math.min(elapsed / this.D.announce, 1);
+        this._drawAnnounce(t);
+        if (elapsed >= this.D.announce) {
+          this.phase = 'active'; this.phaseStart = now;
+          state.targets.forEach(t => this._assignWiggle(t));
+        }
+        break;
+      }
+      case 'active': {
+        this._drawBanner(elapsed / this.D.active);
+        if (elapsed >= this.D.active) {
+          this.phase = 'clear'; this.phaseStart = now;
+          state.targets.forEach(t => { t.wiggleVx = 0; });
+        }
+        break;
+      }
+      case 'clear': {
+        if (elapsed >= this.D.clear) this.phase = 'idle';
+        break;
+      }
+    }
+  },
+
+  _drawAnnounce(t) {
+    ctx.save();
+    ctx.fillStyle = `rgba(255,100,0,${t * 0.45})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (t > 0.2) {
+      const tt = (t - 0.2) / 0.8;
+      ctx.globalAlpha = tt;
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(0.4 + tt * 0.6, 0.4 + tt * 0.6);
+      this._renderText();
+    }
+    ctx.restore();
+  },
+
+  _drawBanner(t) {
+    const pulse = 0.60 + 0.40 * Math.sin(t * Math.PI * 14);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    const sz = Math.max(9, Math.min(canvas.width * 0.025, 15));
+    ctx.font         = `bold ${sz}px 'Press Start 2P'`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor  = '#ff6400';
+    ctx.shadowBlur   = 20;
+    ctx.fillStyle    = '#ff8c00';
+    ctx.fillText('홍수조 Attack!', canvas.width / 2, 10);
+    ctx.restore();
+  },
+
+  _renderText() {
+    const sz = Math.max(14, Math.min(canvas.width * 0.045, 32));
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font         = `bold ${sz}px 'Press Start 2P'`;
+    ctx.shadowColor  = 'rgba(255,100,0,0.95)';
+    ctx.shadowBlur   = 28;
+    ctx.fillStyle    = '#ff6400';
+    ctx.fillText('홍수조 Attack!', 0, 0);
+    ctx.shadowBlur   = 0;
+    ctx.fillStyle    = 'rgba(255,200,80,0.45)';
+    ctx.fillText('홍수조 Attack!', 0, 0);
+  },
+};
+
+// ════════════════════════════════════════════════════════════
+// 신비 Attack! — 타이머가 2배속으로 빨라짐
+// ════════════════════════════════════════════════════════════
+const SHINBI = {
+  phase:      'idle',  // 'idle' | 'announce' | 'active' | 'clear'
+  triggered:  false,
+  phaseStart: 0,
+  triggerAt:  0,
+  MULT:       2,       // 타이머 배속 (2 = 2배 빠름)
+
+  D: { announce: 800, active: 5000, clear: 500 },
+
+  get isActive()    { return this.phase !== 'idle'; },
+  get isTimerFast() { return this.phase === 'active'; },
+  get timerMult()   { return this.phase === 'active' ? this.MULT : 1; },
+
+  init(triggerAt) {
+    this.phase     = 'idle';
+    this.triggered = false;
+    this.triggerAt = triggerAt;
+  },
+
+  tick(elapsedMs, now) {
+    if (this.triggered) return;
+    if (elapsedMs >= this.triggerAt) {
+      this.triggered  = true;
+      this.phase      = 'announce';
+      this.phaseStart = now;
+    }
+  },
+
+  draw(now) {
+    if (!this.isActive) return;
+    const elapsed = now - this.phaseStart;
+
+    switch (this.phase) {
+      case 'announce': {
+        const t = Math.min(elapsed / this.D.announce, 1);
+        this._drawAnnounce(t);
+        if (elapsed >= this.D.announce) { this.phase = 'active'; this.phaseStart = now; }
+        break;
+      }
+      case 'active': {
+        this._drawBanner(elapsed / this.D.active);
+        if (elapsed >= this.D.active) { this.phase = 'clear'; this.phaseStart = now; }
+        break;
+      }
+      case 'clear': {
+        if (elapsed >= this.D.clear) this.phase = 'idle';
+        break;
+      }
+    }
+  },
+
+  _drawAnnounce(t) {
+    ctx.save();
+    ctx.fillStyle = `rgba(130,0,255,${t * 0.42})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (t > 0.2) {
+      const tt = (t - 0.2) / 0.8;
+      ctx.globalAlpha = tt;
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(0.4 + tt * 0.6, 0.4 + tt * 0.6);
+      this._renderText();
+    }
+    ctx.restore();
+  },
+
+  _drawBanner(t) {
+    const pulse = 0.60 + 0.40 * Math.sin(t * Math.PI * 14);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    const sz = Math.max(9, Math.min(canvas.width * 0.025, 15));
+    ctx.font         = `bold ${sz}px 'Press Start 2P'`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.shadowColor  = '#c800ff';
+    ctx.shadowBlur   = 20;
+    ctx.fillStyle    = '#d040ff';
+    ctx.fillText('신비 Attack!  타이머 가속 중', canvas.width / 2, canvas.height - 10);
+    ctx.restore();
+  },
+
+  _renderText() {
+    const sz = Math.max(14, Math.min(canvas.width * 0.045, 32));
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font         = `bold ${sz}px 'Press Start 2P'`;
+    ctx.shadowColor  = 'rgba(160,0,255,0.95)';
+    ctx.shadowBlur   = 28;
+    ctx.fillStyle    = '#c800ff';
+    ctx.fillText('신비 Attack!', 0, 0);
+    ctx.shadowBlur   = 0;
+    ctx.fillStyle    = 'rgba(200,120,255,0.45)';
+    ctx.fillText('신비 Attack!', 0, 0);
   },
 };
 
@@ -271,7 +473,7 @@ let state = {
   combo:         0,
   maxCombo:      0,
   timeLeft:      GAME_DURATION,
-  elapsedMs:     0,   // 게임 경과 ms (마박사 타이밍 계산용)
+  elapsedMs:     0,
   targets:       [],
   particles:     [],
   floatTexts:    [],
@@ -327,7 +529,13 @@ function spawnTarget(phase) {
     color:    type.color,
     lifespan: type.lifespan * phase.lifeMult,
     born:     performance.now(),
+    wiggleVx: 0,
   });
+
+  // 홍수조 진행 중이면 신규 타깃도 즉시 진동
+  if (HONGSOO.isWiggling) {
+    HONGSOO._assignWiggle(state.targets[state.targets.length - 1]);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -364,22 +572,29 @@ function gameLoop(ts) {
   state.lastTimestamp = ts;
   state.elapsedMs    += dt;
 
-  // ── 타이머 ───────────────────────────────────────────────
-  state.timerAccum += dt;
+  // ── 타이머 (신비 Attack 시 배속 적용) ───────────────────
+  state.timerAccum += dt * SHINBI.timerMult;
   if (state.timerAccum >= 1000) {
     state.timerAccum -= 1000;
     state.timeLeft--;
     updateHudTimer();
     if (state.timeLeft <= 0) { endGame(); return; }
   }
+  // 신비 Attack 활성 중이면 매 프레임 HUD 색상 갱신
+  if (SHINBI.isActive) updateHudTimer();
 
   const elapsed = GAME_DURATION - state.timeLeft;
   const phase   = getPhase(elapsed);
 
-  // ── 마박사 Attack! 타이밍 체크 ────────────────────────────
+  // ── 특수 공격 타이밍 체크 ─────────────────────────────
   MABAKSA.tick(state.elapsedMs, ts);
+  HONGSOO.tick(state.elapsedMs, ts);
+  SHINBI.tick(state.elapsedMs, ts);
 
-  // ── 스폰 ─────────────────────────────────────────────────
+  // ── 홍수조: 타깃 진동 업데이트 ───────────────────────
+  HONGSOO.updateTargets(dt);
+
+  // ── 스폰 ─────────────────────────────────────────────
   state.spawnTimer += dt;
   if (state.spawnTimer >= phase.spawnMs) {
     state.spawnTimer = 0;
@@ -391,7 +606,7 @@ function gameLoop(ts) {
     }
   }
 
-  // ── 타깃 만료 ─────────────────────────────────────────────
+  // ── 타깃 만료 ─────────────────────────────────────────
   const now = performance.now();
   let missed = false;
   state.targets = state.targets.filter(t => {
@@ -407,7 +622,7 @@ function gameLoop(ts) {
     updateHudCombo();
   }
 
-  // ── 파티클 업데이트 ──────────────────────────────────────
+  // ── 파티클 업데이트 ──────────────────────────────────
   state.particles.forEach(p => {
     p.life += dt; p.x += p.vx; p.y += p.vy;
     p.vy += 0.12; p.vx *= 0.96;
@@ -415,14 +630,14 @@ function gameLoop(ts) {
   });
   state.particles = state.particles.filter(p => p.alpha > 0.01);
 
-  // ── 플로팅 텍스트 업데이트 ───────────────────────────────
+  // ── 플로팅 텍스트 업데이트 ───────────────────────────
   state.floatTexts.forEach(f => {
     f.life += dt; f.y += f.vy;
     f.alpha = Math.max(0, 1 - f.life / f.maxLife);
   });
   state.floatTexts = state.floatTexts.filter(f => f.alpha > 0);
 
-  // ── 렌더 ─────────────────────────────────────────────────
+  // ── 렌더 ─────────────────────────────────────────────
   draw(ts);
   state.raf = requestAnimationFrame(gameLoop);
 }
@@ -433,13 +648,14 @@ function gameLoop(ts) {
 function draw(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 일반 게임 요소
   state.targets.forEach(t   => drawTarget(t, now));
   state.particles.forEach(p => drawParticle(p));
   state.floatTexts.forEach(f => drawFloatText(f));
 
-  // 마박사 먹물 (게임 요소 위에 덮임)
-  MABAKSA.draw(now);
+  // 특수 공격 오버레이 (게임 요소 위에 덮음)
+  MABAKSA.draw(now); // 먹물 — 최상위
+  HONGSOO.draw(now); // 배너 (상단)
+  SHINBI.draw(now);  // 배너 (하단)
 }
 
 function drawTarget(t, now) {
@@ -529,9 +745,13 @@ function updateHudScore() {
 
 function updateHudTimer() {
   hudTimer.textContent = state.timeLeft;
-  hudTimer.className   = 'hud-value';
-  if      (state.timeLeft <= 5)  hudTimer.className += ' danger';
-  else if (state.timeLeft <= 10) hudTimer.className += ' warning';
+  if (SHINBI.isTimerFast) {
+    hudTimer.className = 'hud-value shinbi-fast';
+  } else {
+    hudTimer.className = 'hud-value';
+    if      (state.timeLeft <= 5)  hudTimer.className += ' danger';
+    else if (state.timeLeft <= 10) hudTimer.className += ' warning';
+  }
 }
 
 function updateHudCombo() {
@@ -629,7 +849,7 @@ function startGame() {
     state.lastTimestamp = 0;
     state.timerAccum    = 0;
 
-    MABAKSA.init();
+    initAttacks();
 
     updateHudScore();
     updateHudTimer();

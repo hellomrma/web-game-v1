@@ -288,8 +288,10 @@ body {
   font-family: var(--font-title); font-size: 14px; color: var(--cyan);
   transition: color 0.1s;
 }
-.hud-value.danger  { color: var(--red); animation: blink 0.6s infinite; }
-.hud-value.warning { color: var(--yellow); }
+.hud-value.danger      { color: var(--red);    animation: blink 0.6s infinite; }
+.hud-value.warning     { color: var(--yellow); }
+.hud-value.shinbi-fast { color: #c800ff; animation: shinbi-blink 0.22s ease-in-out infinite alternate; text-shadow: 0 0 12px #c800ff, 0 0 24px rgba(200,0,255,0.5); }
+@keyframes shinbi-blink { from { opacity: 1; } to { opacity: 0.4; } }
 
 .hud-player {
   font-size: 11px; color: var(--text-dim);
