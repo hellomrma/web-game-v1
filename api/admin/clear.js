@@ -41,21 +41,25 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/scores?score=gte.0`, {
+    // id=gte.1 : bigserial 기본키는 항상 1 이상이므로 전체 삭제를 보장
+    const response = await fetch(`${supabaseUrl}/rest/v1/scores?id=gte.1`, {
       method:  'DELETE',
       headers: {
-        'apikey':        serviceKey,
-        'Authorization': `Bearer ${serviceKey}`,
+        'apikey':          serviceKey,
+        'Authorization':   `Bearer ${serviceKey}`,
+        'Content-Type':    'application/json',
+        'Prefer':          'return=minimal',
       },
     });
 
-    if (!response.ok) {
+    // Supabase DELETE 성공 시 204 No Content 반환
+    if (response.status !== 204 && !response.ok) {
       const errText = await response.text();
-      console.error('[admin/clear] Supabase error:', errText);
+      console.error('[admin/clear] Supabase error:', response.status, errText);
       return res.status(500).json({ error: '삭제 중 오류가 발생했습니다' });
     }
 
-    console.log('[admin/clear] 랭킹 기록 초기화 완료');
+    console.log('[admin/clear] 랭킹 기록 초기화 완료 (status:', response.status, ')');
     return res.status(200).json({ ok: true });
 
   } catch (err) {

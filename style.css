@@ -1,5 +1,5 @@
 /* ============================================================
-   WEB GAME — Global Styles
+   SNAP RUSH — Global Styles
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
@@ -297,11 +297,15 @@ body {
 }
 .hud-combo {
   font-family: var(--font-title); font-size: 11px;
-  color: var(--yellow);
-  text-shadow: 0 0 10px rgba(255,230,0,0.5);
-  opacity: 0; transition: opacity 0.2s;
+  /* color는 JS에서 콤보 티어에 따라 동적으로 설정 */
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  letter-spacing: 0.04em;
 }
-.hud-combo.active { opacity: 1; }
+.hud-combo.active {
+  opacity: 1;
+  text-shadow: 0 0 12px currentColor;
+}
 
 /* ── Canvas Wrapper ──────────────────────────────────────── */
 .canvas-wrap {

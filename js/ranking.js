@@ -170,10 +170,14 @@ async function handleConfirm() {
       return;
     }
 
-    // 성공
+    // 성공 — 모달 닫고 목록 갱신
     closeModal();
     pbCard.style.display = 'none';
-    await render();
+    rankBody.innerHTML   = '';        // 즉시 테이블 비우기 (캐시 대기 없이 반영)
+    rankEmpty.style.display = 'block';
+    rankTable.style.display = 'none';
+    subtitle.textContent    = '// 전체 0회 플레이 기록';
+    await render();                   // 서버에서 최신 데이터 다시 로딩
     showToast('기록이 초기화되었습니다', 'info');
 
   } catch (err) {

@@ -47,7 +47,7 @@ const RemoteStore = {
   async getTop(n = 20) {
     const res = await fetch(
       `${apiUrl()}?select=name,score,created_at&order=score.desc&limit=${n}`,
-      { headers: headers() }
+      { headers: headers(), cache: 'no-store' }
     );
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -61,7 +61,7 @@ const RemoteStore = {
   async getPersonalBest(name) {
     const res = await fetch(
       `${apiUrl()}?name=eq.${encodeURIComponent(name)}&select=name,score,created_at&order=score.desc&limit=1`,
-      { headers: headers() }
+      { headers: headers(), cache: 'no-store' }
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -72,7 +72,7 @@ const RemoteStore = {
   async getRank(score) {
     const res = await fetch(
       `${apiUrl()}?score=gt.${score}&select=id`,
-      { headers: headers({ 'Prefer': 'count=exact' }) }
+      { headers: headers({ 'Prefer': 'count=exact' }), cache: 'no-store' }
     );
     // Content-Range: 0-N/TOTAL 또는 */TOTAL
     const range = res.headers.get('Content-Range');
@@ -83,7 +83,7 @@ const RemoteStore = {
   async getTotal() {
     const res = await fetch(
       `${apiUrl()}?select=id&limit=1`,
-      { headers: headers({ 'Prefer': 'count=exact' }) }
+      { headers: headers({ 'Prefer': 'count=exact' }), cache: 'no-store' }
     );
     const range = res.headers.get('Content-Range');
     const total = parseInt(range?.split('/')[1] ?? '0');
