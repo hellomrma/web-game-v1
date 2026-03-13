@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WEB GAME</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="grid-bg"   aria-hidden="true"></div>
+
+  <main class="name-screen">
+
+    <div class="logo-bg-text" aria-hidden="true">GAME</div>
+
+    <div class="logo-area">
+      <h1 class="logo-title glitch" data-text="WEB GAME">WEB GAME</h1>
+      <p class="logo-sub">// target rush — 순발력 게임</p>
+    </div>
+
+    <div class="name-card">
+      <p class="name-card-title">플레이어 정보 입력</p>
+      <div class="name-form">
+        <div>
+          <label class="label" for="name-input">닉네임</label>
+          <input
+            class="input"
+            type="text"
+            id="name-input"
+            placeholder="닉네임을 입력하세요"
+            maxlength="12"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <button class="btn btn-primary" id="start-btn" style="width:100%; font-size:11px;">
+          게임 시작
+          <span>→</span>
+        </button>
+      </div>
+    </div>
+
+    <a class="ranking-link" href="ranking.html">🏆 랭킹 보기</a>
+
+  </main>
+
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script>
+    const nameInput = document.getElementById('name-input');
+    const startBtn  = document.getElementById('start-btn');
+    const toast     = document.getElementById('toast');
+
+    // 저장된 닉네임 복원
+    const saved = localStorage.getItem('wg-player-name');
+    if (saved) nameInput.value = saved;
+
+    function showToast(msg, type = 'error') {
+      toast.textContent = msg;
+      toast.className = `toast ${type} show`;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.classList.remove('show'), 2800);
+    }
+
+    function startGame() {
+      const name = nameInput.value.trim();
+      if (!name) {
+        nameInput.focus();
+        showToast('닉네임을 입력해 주세요');
+        return;
+      }
+      localStorage.setItem('wg-player-name', name);
+      window.location.href = `game.html?name=${encodeURIComponent(name)}`;
+    }
+
+    startBtn.addEventListener('click', startGame);
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(); });
+
+    // 자동 포커스
+    nameInput.focus();
+    if (nameInput.value) nameInput.select();
+  </script>
+</body>
+</html>

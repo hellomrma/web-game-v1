@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WEB GAME — 게임</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="grid-bg"   aria-hidden="true"></div>
+
+  <div class="game-screen">
+
+    <!-- ── HUD ──────────────────────────────────────────── -->
+    <div class="game-hud" id="game-hud">
+      <div class="hud-block">
+        <span class="hud-label">점수</span>
+        <span class="hud-value" id="hud-score">0</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <span class="hud-player" id="hud-player">—</span>
+        <span class="hud-combo"  id="hud-combo">COMBO ×1</span>
+      </div>
+
+      <div class="hud-block">
+        <span class="hud-label">남은 시간</span>
+        <span class="hud-value" id="hud-timer">30</span>
+      </div>
+    </div>
+
+    <!-- ── Canvas ────────────────────────────────────────── -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- 카운트다운 -->
+      <div class="countdown-overlay" id="countdown-overlay">
+        <span class="countdown-number" id="countdown-number">3</span>
+      </div>
+
+      <!-- 시작 전 오버레이 -->
+      <div class="overlay" id="start-overlay">
+        <p class="start-overlay-title" id="start-title">준비됐나요?</p>
+        <p class="start-overlay-sub" id="start-sub">
+          화면에 나타나는 타깃을 클릭하세요<br/>
+          <span>작은 타깃</span>일수록 <span>높은 점수</span>!<br/>
+          제한 시간: <span>30초</span>
+        </p>
+        <button class="btn btn-primary" id="btn-start-game" style="font-size:11px;">
+          시작하기 →
+        </button>
+      </div>
+
+      <!-- 게임 종료 오버레이 -->
+      <div class="overlay hidden" id="end-overlay">
+        <div class="end-card">
+          <p class="end-label">GAME OVER</p>
+          <p class="end-score" id="end-score">0</p>
+          <p class="end-rank"  id="end-rank">순위 <span>—</span></p>
+          <p class="end-personal-best hidden" id="end-pb">🏆 개인 최고 기록 갱신!</p>
+          <div class="end-buttons">
+            <button class="btn btn-primary"  id="btn-retry"   style="font-size:9px;">다시 하기</button>
+            <button class="btn btn-outline"  id="btn-ranking" style="font-size:9px;">랭킹 보기</button>
+            <button class="btn btn-ghost"    id="btn-home"    style="font-size:11px;">홈</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
