@@ -11,9 +11,9 @@
  *  Phase 3 26~40s : 최대 7개, 0.38s 간격, 버스트 스폰 30%, 수명 短
  *
  * ── 특수 공격 이벤트 (게임 중 각 1번, 랜덤 타이밍) ──────────
- *  마박사 Attack! — 먹물이 화면을 뒤덮어 타깃이 보이지 않음
- *  홍수조 Attack! — 타깃이 빠르게 좌우로 진동
- *  신비   Attack! — 타이머가 2배속으로 빨라짐
+ *  흑술사 Attack! — 먹물이 화면을 뒤덮어 타깃이 보이지 않음
+ *  폭풍귀 Attack! — 타깃이 빠르게 좌우로 진동
+ *  시간도둑 Attack! — 타이머가 2배속으로 빨라짐
  */
 
 // ── URL 파라미터 ─────────────────────────────────────────────
@@ -99,7 +99,7 @@ function initAttacks() {
 }
 
 // ════════════════════════════════════════════════════════════
-// 마박사 Attack! — 먹물이 화면을 뒤덮음
+// 흑술사 Attack! — 먹물이 화면을 뒤덮음
 // ════════════════════════════════════════════════════════════
 const MABAKSA = {
   phase:      'idle',  // 'idle' | 'announce' | 'spread' | 'hold' | 'clear'
@@ -210,10 +210,10 @@ const MABAKSA = {
     ctx.shadowColor  = 'rgba(255,0,0,0.9)';
     ctx.shadowBlur   = 24;
     ctx.fillStyle    = '#ff2020';
-    ctx.fillText('마박사 Attack!', 0, 0);
+    ctx.fillText('흑술사 Attack!', 0, 0);
     ctx.shadowBlur   = 0;
     ctx.fillStyle    = 'rgba(255,160,160,0.4)';
-    ctx.fillText('마박사 Attack!', 0, 0);
+    ctx.fillText('흑술사 Attack!', 0, 0);
   },
 
   _drawInk(progress) {
@@ -247,7 +247,7 @@ const MABAKSA = {
 };
 
 // ════════════════════════════════════════════════════════════
-// 홍수조 Attack! — 타깃이 빠르게 좌우로 진동
+// 폭풍귀 Attack! — 타깃이 빠르게 좌우로 진동
 // ════════════════════════════════════════════════════════════
 const HONGSOO = {
   phase:      'idle',  // 'idle' | 'announce' | 'active' | 'clear'
@@ -347,7 +347,7 @@ const HONGSOO = {
     ctx.shadowColor  = '#ff6400';
     ctx.shadowBlur   = 20;
     ctx.fillStyle    = '#ff8c00';
-    ctx.fillText('홍수조 Attack!', canvas.width / 2, 10);
+    ctx.fillText('폭풍귀 Attack!', canvas.width / 2, 10);
     ctx.restore();
   },
 
@@ -359,15 +359,15 @@ const HONGSOO = {
     ctx.shadowColor  = 'rgba(255,100,0,0.95)';
     ctx.shadowBlur   = 28;
     ctx.fillStyle    = '#ff6400';
-    ctx.fillText('홍수조 Attack!', 0, 0);
+    ctx.fillText('폭풍귀 Attack!', 0, 0);
     ctx.shadowBlur   = 0;
     ctx.fillStyle    = 'rgba(255,200,80,0.45)';
-    ctx.fillText('홍수조 Attack!', 0, 0);
+    ctx.fillText('폭풍귀 Attack!', 0, 0);
   },
 };
 
 // ════════════════════════════════════════════════════════════
-// 신비 Attack! — 타이머가 2배속으로 빨라짐
+// 시간도둑 Attack! — 타이머가 2배속으로 빨라짐
 // ════════════════════════════════════════════════════════════
 const SHINBI = {
   phase:      'idle',  // 'idle' | 'announce' | 'active' | 'clear'
@@ -445,7 +445,7 @@ const SHINBI = {
     ctx.shadowColor  = '#c800ff';
     ctx.shadowBlur   = 20;
     ctx.fillStyle    = '#d040ff';
-    ctx.fillText('신비 Attack!  타이머 가속 중', canvas.width / 2, canvas.height - 10);
+    ctx.fillText('시간도둑 Attack!  타이머 가속 중', canvas.width / 2, canvas.height - 10);
     ctx.restore();
   },
 
@@ -457,10 +457,10 @@ const SHINBI = {
     ctx.shadowColor  = 'rgba(160,0,255,0.95)';
     ctx.shadowBlur   = 28;
     ctx.fillStyle    = '#c800ff';
-    ctx.fillText('신비 Attack!', 0, 0);
+    ctx.fillText('시간도둑 Attack!', 0, 0);
     ctx.shadowBlur   = 0;
     ctx.fillStyle    = 'rgba(200,120,255,0.45)';
-    ctx.fillText('신비 Attack!', 0, 0);
+    ctx.fillText('시간도둑 Attack!', 0, 0);
   },
 };
 
@@ -532,7 +532,7 @@ function spawnTarget(phase) {
     wiggleVx: 0,
   });
 
-  // 홍수조 진행 중이면 신규 타깃도 즉시 진동
+  // 폭풍귀 진행 중이면 신규 타깃도 즉시 진동
   if (HONGSOO.isWiggling) {
     HONGSOO._assignWiggle(state.targets[state.targets.length - 1]);
   }
@@ -572,7 +572,7 @@ function gameLoop(ts) {
   state.lastTimestamp = ts;
   state.elapsedMs    += dt;
 
-  // ── 타이머 (신비 Attack 시 배속 적용) ───────────────────
+  // ── 타이머 (시간도둑 Attack 시 배속 적용) ───────────────────
   state.timerAccum += dt * SHINBI.timerMult;
   if (state.timerAccum >= 1000) {
     state.timerAccum -= 1000;
@@ -580,7 +580,7 @@ function gameLoop(ts) {
     updateHudTimer();
     if (state.timeLeft <= 0) { endGame(); return; }
   }
-  // 신비 Attack 활성 중이면 매 프레임 HUD 색상 갱신
+  // 시간도둑 Attack 활성 중이면 매 프레임 HUD 색상 갱신
   if (SHINBI.isActive) updateHudTimer();
 
   const elapsed = GAME_DURATION - state.timeLeft;
@@ -591,7 +591,7 @@ function gameLoop(ts) {
   HONGSOO.tick(state.elapsedMs, ts);
   SHINBI.tick(state.elapsedMs, ts);
 
-  // ── 홍수조: 타깃 진동 업데이트 ───────────────────────
+  // ── 폭풍귀: 타깃 진동 업데이트 ───────────────────────
   HONGSOO.updateTargets(dt);
 
   // ── 스폰 ─────────────────────────────────────────────
