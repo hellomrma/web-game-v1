@@ -3,19 +3,16 @@
  *
  * ── 점수 규칙 ────────────────────────────────────────────────
  *  타깃 기본 점수: 대(cyan)=1  중(yellow)=3  소(pink)=5
+ *  콤보 배율: 1~4 ×1 / 5~9 ×2 / 10~14 ×3 / 15+ ×4 MAX
  *
- *  콤보 배율 (연속 히트 수)
- *    1~4   : ×1  (기본)
- *    5~9   : ×2  🔥
- *    10~14 : ×3  🔥🔥
- *    15+   : ×4  🔥🔥🔥  MAX
+ * ── 난이도 페이즈 (40초) ────────────────────────────────────
+ *  Phase 1  0~13s : 최대 3개,  0.9s 간격
+ *  Phase 2 13~26s : 최대 5개,  0.6s 간격, 버스트 스폰 15%
+ *  Phase 3 26~40s : 최대 7개, 0.38s 간격, 버스트 스폰 30%, 수명 短
  *
- *  타깃 놓치면 콤보 즉시 리셋
- *
- * ── 난이도 페이즈 ────────────────────────────────────────────
- *  Phase 1  0~10s : 최대 3개,  0.9s 간격, 기본 속도
- *  Phase 2 10~20s : 최대 5개,  0.6s 간격, 순간 2개 스폰 15%
- *  Phase 3 20~30s : 최대 7개,  0.38s 간격, 순간 2개 스폰 30%, 수명 短
+ * ── 마박사 Attack! ──────────────────────────────────────────
+ *  게임 중 딱 1번, 랜덤 타이밍에 발동
+ *  먹물이 화면을 뒤덮는 동안 타깃이 보이지 않음
  */
 
 // ── URL 파라미터 ─────────────────────────────────────────────
@@ -50,25 +47,23 @@ const btnHome       = document.getElementById('btn-home');
 hudPlayer.textContent = playerName;
 
 // ════════════════════════════════════════════════════════════
-// 게임 설정 상수
+// 상수
 // ════════════════════════════════════════════════════════════
 
-// 타깃 종류: [반지름, 기본점수, 색상, 기본수명ms]
+const GAME_DURATION = 40; // 초
+
 const TARGET_TYPES = [
-  { r: 46, pts: 1, color: '#00e5cc', lifespan: 2000 }, // 대 (cyan)
-  { r: 28, pts: 3, color: '#ffe600', lifespan: 1350 }, // 중 (yellow)
-  { r: 16, pts: 5, color: '#ff1a6c', lifespan: 850  }, // 소 (pink)
+  { r: 46, pts: 1, color: '#00e5cc', lifespan: 2000 },
+  { r: 28, pts: 3, color: '#ffe600', lifespan: 1350 },
+  { r: 16, pts: 5, color: '#ff1a6c', lifespan: 850  },
 ];
 
-// 페이즈별 설정
 const PHASES = [
-  //  종료시각  동시최대  스폰ms  수명배율  가중치[대,중,소]  버스트확률
-  { until: 10, max: 3, spawnMs: 900,  lifeMult: 1.00, w: [60, 30, 10], burst: 0.00 },
-  { until: 20, max: 5, spawnMs: 600,  lifeMult: 0.85, w: [45, 40, 15], burst: 0.15 },
-  { until: 30, max: 7, spawnMs: 380,  lifeMult: 0.70, w: [30, 45, 25], burst: 0.30 },
+  { until: 13, max: 3, spawnMs: 900,  lifeMult: 1.00, w: [60, 30, 10], burst: 0.00 },
+  { until: 26, max: 5, spawnMs: 600,  lifeMult: 0.85, w: [45, 40, 15], burst: 0.15 },
+  { until: 40, max: 7, spawnMs: 380,  lifeMult: 0.70, w: [30, 45, 25], burst: 0.30 },
 ];
 
-// 콤보 배율 테이블
 const COMBO_TIERS = [
   { min: 15, multi: 4, label: '×4 MAX', color: '#ff1a6c' },
   { min: 10, multi: 3, label: '×3',     color: '#ffe600' },
@@ -79,27 +74,211 @@ const COMBO_TIERS = [
 function getComboTier(combo) {
   return COMBO_TIERS.find(t => combo >= t.min);
 }
-
 function getPhase(elapsed) {
   return PHASES.find(p => elapsed < p.until) ?? PHASES[PHASES.length - 1];
 }
 
 // ════════════════════════════════════════════════════════════
+// 마박사 Attack! 이벤트
+// ════════════════════════════════════════════════════════════
+const MABAKSA = {
+  phase:      'idle',  // 'idle' | 'announce' | 'spread' | 'hold' | 'clear'
+  triggered:  false,
+  phaseStart: 0,
+  triggerAt:  0,       // ms (게임 경과 기준)
+  drops:      [],      // 먹물 방울 목록
+
+  // 각 페이즈 지속 시간 (ms)
+  D: { announce: 1000, spread: 1600, hold: 2400, clear: 900 },
+
+  init() {
+    this.phase     = 'idle';
+    this.triggered = false;
+    this.drops     = [];
+    // 8초 ~ 30초 사이 랜덤 발동 (40초 게임에서 마지막 10초는 제외)
+    this.triggerAt = 8000 + Math.random() * 22000;
+  },
+
+  get isActive() { return this.phase !== 'idle'; },
+
+  // gameLoop 에서 매 프레임 호출 — 발동 여부 체크
+  tick(elapsedMs, now) {
+    if (this.triggered) return;
+    if (elapsedMs >= this.triggerAt) {
+      this.triggered  = true;
+      this.phase      = 'announce';
+      this.phaseStart = now;
+      this._spawnDrops();
+    }
+  },
+
+  _spawnDrops() {
+    const count = 5 + Math.floor(Math.random() * 3); // 5~7 방울
+    const diag  = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
+    for (let i = 0; i < count; i++) {
+      this.drops.push({
+        x:     Math.random() * canvas.width,
+        y:     Math.random() * canvas.height,
+        maxR:  diag * (0.5 + Math.random() * 0.35),
+        scaleX: 0.85 + Math.random() * 0.3, // 타원형 비율 (먹물 번짐 느낌)
+        scaleY: 0.85 + Math.random() * 0.3,
+        angle:  Math.random() * Math.PI,
+        delay:  Math.random() * 0.35,        // 방울마다 시작 딜레이
+      });
+    }
+  },
+
+  // draw 에서 매 프레임 호출
+  draw(now) {
+    if (!this.isActive) return;
+    const elapsed = now - this.phaseStart;
+
+    switch (this.phase) {
+      case 'announce': {
+        const t = elapsed / this.D.announce;
+        this._drawAnnounce(Math.min(t, 1));
+        if (elapsed >= this.D.announce) {
+          this.phase = 'spread'; this.phaseStart = now;
+        }
+        break;
+      }
+      case 'spread': {
+        const t = elapsed / this.D.spread;
+        this._drawInk(Math.min(t, 1));
+        this._drawAttackText(1, false);
+        if (elapsed >= this.D.spread) {
+          this.phase = 'hold'; this.phaseStart = now;
+        }
+        break;
+      }
+      case 'hold': {
+        this._drawInk(1);
+        this._drawAttackText(1, true, elapsed / this.D.hold);
+        if (elapsed >= this.D.hold) {
+          this.phase = 'clear'; this.phaseStart = now;
+        }
+        break;
+      }
+      case 'clear': {
+        const t = 1 - elapsed / this.D.clear;
+        this._drawInk(Math.max(t, 0));
+        if (elapsed >= this.D.clear) {
+          this.phase = 'idle';
+        }
+        break;
+      }
+    }
+  },
+
+  // ── Announce: 화면 디밍 + 경고 텍스트 등장 ─────────────────
+  _drawAnnounce(t) {
+    ctx.save();
+
+    // 검은 디밍
+    ctx.fillStyle = `rgba(0,0,0,${t * 0.55})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 텍스트 등장 (t > 0.25 부터)
+    if (t > 0.25) {
+      const textT = (t - 0.25) / 0.75;
+      // 확대하며 등장
+      const scale = 0.4 + textT * 0.6;
+      ctx.globalAlpha = textT;
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(scale, scale);
+      this._renderAttackString();
+    }
+
+    ctx.restore();
+  },
+
+  // ── Spread / Hold: 텍스트 (상단에 그림) ────────────────────
+  _drawAttackText(alpha, pulse, holdT = 0) {
+    ctx.save();
+    const p = pulse ? 0.5 + 0.5 * Math.sin(holdT * Math.PI * 5) : 1;
+    ctx.globalAlpha = alpha * p * 0.55;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    this._renderAttackString();
+    ctx.restore();
+  },
+
+  _renderAttackString() {
+    const size = Math.max(14, Math.min(canvas.width * 0.045, 32));
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font         = `bold ${size}px 'Press Start 2P'`;
+
+    // 빨간 외곽 그림자
+    ctx.shadowColor = 'rgba(255,0,0,0.9)';
+    ctx.shadowBlur  = 24;
+    ctx.fillStyle   = '#ff2020';
+    ctx.fillText('마박사 Attack!', 0, 0);
+
+    // 흰색 하이라이트 (텍스트 위에 얇게)
+    ctx.shadowBlur  = 0;
+    ctx.fillStyle   = 'rgba(255,160,160,0.4)';
+    ctx.fillText('마박사 Attack!', 0, 0);
+  },
+
+  // ── Ink: 먹물 번짐 ─────────────────────────────────────────
+  _drawInk(progress) {
+    if (progress <= 0) return;
+
+    ctx.save();
+
+    this.drops.forEach(drop => {
+      // delay 반영한 개별 진행도
+      const localT = Math.min(Math.max((progress - drop.delay) / (1 - drop.delay), 0), 1);
+      if (localT <= 0) return;
+
+      const baseR = drop.maxR * localT;
+
+      ctx.save();
+      ctx.translate(drop.x, drop.y);
+      ctx.rotate(drop.angle);
+      ctx.scale(drop.scaleX, drop.scaleY);
+
+      // 방울 중심부 — 불투명
+      const innerR = baseR * 0.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(2, 2, 10, ${Math.min(progress * 1.4, 1)})`;
+      ctx.fill();
+
+      // 방울 외곽 — 흐림 (먹물 번짐 느낌)
+      const grad = ctx.createRadialGradient(0, 0, innerR * 0.8, 0, 0, baseR);
+      grad.addColorStop(0,   `rgba(2, 2, 10, ${Math.min(progress * 1.2, 0.98)})`);
+      grad.addColorStop(0.6, `rgba(2, 2, 10, ${Math.min(progress * 0.9, 0.85)})`);
+      grad.addColorStop(1,   'rgba(2, 2, 10, 0)');
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.restore();
+    });
+
+    ctx.restore();
+  },
+};
+
+// ════════════════════════════════════════════════════════════
 // 게임 상태
 // ════════════════════════════════════════════════════════════
 let state = {
-  phase:          'idle',
-  score:          0,
-  combo:          0,
-  maxCombo:       0,
-  timeLeft:       30,
-  targets:        [],
-  particles:      [],
-  floatTexts:     [],   // 히트 시 떠오르는 점수 텍스트
-  spawnTimer:     0,
-  lastTimestamp:  0,
-  timerAccum:     0,
-  raf:            null,
+  phase:         'idle',
+  score:         0,
+  combo:         0,
+  maxCombo:      0,
+  timeLeft:      GAME_DURATION,
+  elapsedMs:     0,   // 게임 경과 ms (마박사 타이밍 계산용)
+  targets:       [],
+  particles:     [],
+  floatTexts:    [],
+  spawnTimer:    0,
+  lastTimestamp: 0,
+  timerAccum:    0,
+  raf:           null,
 };
 
 // ── 캔버스 크기 ──────────────────────────────────────────────
@@ -127,12 +306,11 @@ function weightedRandom(weights) {
 }
 
 function spawnTarget(phase) {
-  const idx  = weightedRandom(phase.w);
-  const type = TARGET_TYPES[idx];
+  const idx    = weightedRandom(phase.w);
+  const type   = TARGET_TYPES[idx];
   const margin = type.r + 12;
-
-  // 다른 타깃과 겹치지 않도록 최대 8번 시도
   let x, y, tries = 0;
+
   do {
     x = margin + Math.random() * (canvas.width  - margin * 2);
     y = margin + Math.random() * (canvas.height - margin * 2);
@@ -161,25 +339,18 @@ function spawnParticles(x, y, color, count) {
     const speed = 2.5 + Math.random() * 4.5;
     state.particles.push({
       x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      color,
-      alpha: 1,
-      size: 2.5 + Math.random() * 3,
-      life: 0,
-      maxLife: 450 + Math.random() * 200,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      color, alpha: 1, size: 2.5 + Math.random() * 3,
+      life: 0, maxLife: 450 + Math.random() * 200,
     });
   }
 }
 
 function spawnFloatText(x, y, text, color) {
   state.floatTexts.push({
-    x, y,
-    text, color,
-    alpha: 1,
-    vy: -1.8,
-    life: 0,
-    maxLife: 700,
+    x, y, text, color,
+    alpha: 1, vy: -1.8,
+    life: 0, maxLife: 700,
   });
 }
 
@@ -191,6 +362,7 @@ function gameLoop(ts) {
 
   const dt = state.lastTimestamp ? Math.min(ts - state.lastTimestamp, 50) : 0;
   state.lastTimestamp = ts;
+  state.elapsedMs    += dt;
 
   // ── 타이머 ───────────────────────────────────────────────
   state.timerAccum += dt;
@@ -201,8 +373,11 @@ function gameLoop(ts) {
     if (state.timeLeft <= 0) { endGame(); return; }
   }
 
-  const elapsed = 30 - state.timeLeft;
+  const elapsed = GAME_DURATION - state.timeLeft;
   const phase   = getPhase(elapsed);
+
+  // ── 마박사 Attack! 타이밍 체크 ────────────────────────────
+  MABAKSA.tick(state.elapsedMs, ts);
 
   // ── 스폰 ─────────────────────────────────────────────────
   state.spawnTimer += dt;
@@ -210,7 +385,6 @@ function gameLoop(ts) {
     state.spawnTimer = 0;
     if (state.targets.length < phase.max) {
       spawnTarget(phase);
-      // 버스트: 2개 동시 스폰
       if (Math.random() < phase.burst && state.targets.length < phase.max) {
         spawnTarget(phase);
       }
@@ -223,7 +397,6 @@ function gameLoop(ts) {
   state.targets = state.targets.filter(t => {
     if (now - t.born >= t.lifespan) {
       missed = true;
-      // 만료 파티클 (회색)
       spawnParticles(t.x, t.y, '#333355', 5);
       return false;
     }
@@ -236,24 +409,21 @@ function gameLoop(ts) {
 
   // ── 파티클 업데이트 ──────────────────────────────────────
   state.particles.forEach(p => {
-    p.life += dt;
-    p.x   += p.vx;
-    p.y   += p.vy;
-    p.vy  += 0.12;
-    p.vx  *= 0.96;
+    p.life += dt; p.x += p.vx; p.y += p.vy;
+    p.vy += 0.12; p.vx *= 0.96;
     p.alpha = 1 - p.life / p.maxLife;
   });
   state.particles = state.particles.filter(p => p.alpha > 0.01);
 
   // ── 플로팅 텍스트 업데이트 ───────────────────────────────
   state.floatTexts.forEach(f => {
-    f.life += dt;
-    f.y    += f.vy;
+    f.life += dt; f.y += f.vy;
     f.alpha = Math.max(0, 1 - f.life / f.maxLife);
   });
   state.floatTexts = state.floatTexts.filter(f => f.alpha > 0);
 
-  draw(now);
+  // ── 렌더 ─────────────────────────────────────────────────
+  draw(ts);
   state.raf = requestAnimationFrame(gameLoop);
 }
 
@@ -263,14 +433,18 @@ function gameLoop(ts) {
 function draw(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  state.targets.forEach(t  => drawTarget(t, now));
+  // 일반 게임 요소
+  state.targets.forEach(t   => drawTarget(t, now));
   state.particles.forEach(p => drawParticle(p));
   state.floatTexts.forEach(f => drawFloatText(f));
+
+  // 마박사 먹물 (게임 요소 위에 덮임)
+  MABAKSA.draw(now);
 }
 
 function drawTarget(t, now) {
   const progress = Math.min((now - t.born) / t.lifespan, 1);
-  const urgency  = progress > 0.6 ? (progress - 0.6) / 0.4 : 0; // 0~1 (마지막 40%부터)
+  const urgency  = progress > 0.6 ? (progress - 0.6) / 0.4 : 0;
 
   ctx.save();
   ctx.globalAlpha = 1 - progress * 0.25;
@@ -278,23 +452,18 @@ function drawTarget(t, now) {
 
   const r = t.r;
 
-  // 배경 원 (희미)
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fillStyle = t.color + '18';
   ctx.fill();
 
-  // 외부 타이머 링 (남은 시간 표시)
   ctx.beginPath();
   ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + (1 - progress) * Math.PI * 2);
-  ctx.strokeStyle = urgency > 0
-    ? lerpColor(t.color, '#ff3333', urgency)  // 마감 임박 시 빨갛게
-    : t.color;
+  ctx.strokeStyle = urgency > 0 ? lerpColor(t.color, '#ff3333', urgency) : t.color;
   ctx.lineWidth   = 3.5;
   ctx.lineCap     = 'round';
   ctx.stroke();
 
-  // 내부 원
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
   ctx.fillStyle   = t.color + '22';
@@ -303,7 +472,6 @@ function drawTarget(t, now) {
   ctx.lineWidth   = 1;
   ctx.stroke();
 
-  // 점수 텍스트
   ctx.fillStyle    = urgency > 0.5 ? '#ffffff' : t.color;
   ctx.font         = `bold ${Math.round(r * 0.5)}px 'Share Tech Mono'`;
   ctx.textAlign    = 'center';
@@ -345,15 +513,11 @@ function drawIdleBg() {
   ctx.fillText('// 시작 버튼을 눌러 게임을 시작하세요', canvas.width / 2, canvas.height / 2);
 }
 
-// ── 색상 보간 헬퍼 ────────────────────────────────────────────
 function lerpColor(hex1, hex2, t) {
   const p = (h, o) => parseInt(h.slice(o, o + 2), 16);
   const r1 = p(hex1, 1), g1 = p(hex1, 3), b1 = p(hex1, 5);
   const r2 = p(hex2, 1), g2 = p(hex2, 3), b2 = p(hex2, 5);
-  const r = Math.round(r1 + (r2 - r1) * t);
-  const g = Math.round(g1 + (g2 - g1) * t);
-  const b = Math.round(b1 + (b2 - b1) * t);
-  return `rgb(${r},${g},${b})`;
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -372,12 +536,9 @@ function updateHudTimer() {
 
 function updateHudCombo() {
   const tier = getComboTier(state.combo);
-  if (state.combo < 2) {
-    hudCombo.classList.remove('active');
-    return;
-  }
-  hudCombo.textContent  = `${state.combo} COMBO  ${tier.label}`;
-  hudCombo.style.color  = tier.color;
+  if (state.combo < 2) { hudCombo.classList.remove('active'); return; }
+  hudCombo.textContent = `${state.combo} COMBO  ${tier.label}`;
+  hudCombo.style.color = tier.color;
   hudCombo.classList.add('active');
 }
 
@@ -399,37 +560,27 @@ function handleHit(e) {
 
   const { x, y } = getCanvasPos(e);
 
-  // 반지름이 작은 타깃 우선 (역순 탐색)
   for (let i = state.targets.length - 1; i >= 0; i--) {
     const t  = state.targets[i];
     const dx = x - t.x, dy = y - t.y;
     if (Math.sqrt(dx * dx + dy * dy) > t.r) continue;
 
-    // 콤보 증가 → 배율 계산
     state.combo++;
     if (state.combo > state.maxCombo) state.maxCombo = state.combo;
 
     const tier   = getComboTier(state.combo);
     const gained = t.pts * tier.multi;
     state.score += gained;
-
     state.targets.splice(i, 1);
 
-    // 파티클
     spawnParticles(t.x, t.y, t.color, 6 + t.pts * 3);
-
-    // 플로팅 점수 텍스트
-    const label = tier.multi > 1
-      ? `+${gained} (×${tier.multi})`
-      : `+${gained}`;
+    const label = tier.multi > 1 ? `+${gained} (×${tier.multi})` : `+${gained}`;
     spawnFloatText(t.x, t.y - t.r - 6, label, tier.color);
 
     updateHudScore();
     updateHudCombo();
     return;
   }
-
-  // 빈 곳 클릭 — 패널티 없음, 콤보는 유지
 }
 
 canvas.addEventListener('click',      handleHit);
@@ -469,7 +620,8 @@ function startGame() {
     state.score         = 0;
     state.combo         = 0;
     state.maxCombo      = 0;
-    state.timeLeft      = 30;
+    state.timeLeft      = GAME_DURATION;
+    state.elapsedMs     = 0;
     state.targets       = [];
     state.particles     = [];
     state.floatTexts    = [];
@@ -477,11 +629,12 @@ function startGame() {
     state.lastTimestamp = 0;
     state.timerAccum    = 0;
 
+    MABAKSA.init();
+
     updateHudScore();
     updateHudTimer();
     hudCombo.classList.remove('active');
 
-    // 시작과 동시에 타깃 2개 즉시 스폰
     spawnTarget(PHASES[0]);
     spawnTarget(PHASES[0]);
 
@@ -498,11 +651,10 @@ async function endGame() {
   endRank.innerHTML    = `<span style="font-size:11px;color:var(--text-muted)">저장 중...</span>`;
   endPb.classList.add('hidden');
 
-  // 최대 콤보 표시 (end-rank 아래에 추가)
   let comboEl = document.getElementById('end-max-combo');
   if (!comboEl) {
     comboEl = document.createElement('p');
-    comboEl.id        = 'end-max-combo';
+    comboEl.id = 'end-max-combo';
     comboEl.className = 'end-rank';
     comboEl.style.cssText = 'font-size:12px; color:var(--text-dim); margin-bottom:6px;';
     endRank.insertAdjacentElement('afterend', comboEl);
@@ -515,7 +667,6 @@ async function endGame() {
     const prevBest = await ScoreStore.getPersonalBest(playerName);
     const isNew    = !prevBest || state.score > prevBest.score;
     const rank     = await ScoreStore.save(playerName, state.score);
-
     endRank.innerHTML = `순위 <span>#${rank}</span>`;
     endPb.classList.toggle('hidden', !isNew);
   } catch (err) {
